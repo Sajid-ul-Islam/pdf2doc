@@ -1,7 +1,7 @@
-
 import streamlit as st
 from pdf2docx import Converter
-import io
+import tempfile
+import os
 
 st.set_page_config(layout="wide", page_title="PDF to DOCX Converter")
 st.title("PDF to DOCX Converter")
@@ -13,24 +13,39 @@ uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 if uploaded_file is not None:
     st.success("PDF file uploaded successfully!")
 
-    # Create in-memory file-like objects
-    pdf_file_in_memory = io.BytesIO(uploaded_file.getvalue())
-    docx_file_in_memory = io.BytesIO()
-
     try:
         with st.spinner("Converting PDF to DOCX..."):
-            cv = Converter(pdf_file_in_memory)
-            cv.convert(docx_file_in_memory)
+            # Save uploaded PDF to a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
+                tmp_pdf.write(uploaded_file.getvalue())
+                tmp_pdf_path = tmp_pdf.name
+
+            # Create a temporary file path for the output DOCX
+            tmp_docx_path = tmp_pdf_path.replace(".pdf", ".docx")
+
+            # Convert using file paths
+            cv = Converter(tmp_pdf_path)
+            cv.convert(tmp_docx_path)
             cv.close()
+
         st.success("Conversion complete!")
 
-        docx_file_in_memory.seek(0)
+        # Read the converted DOCX file for download
+        with open(tmp_docx_path, "rb") as f:
+            docx_data = f.read()
+
         st.download_button(
             label="Download DOCX File",
-            data=docx_file_in_memory.getvalue(),
+            data=docx_data,
             file_name=uploaded_file.name.replace(".pdf", ".docx"),
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
+
+        # Clean up temporary files
+        os.unlink(tmp_pdf_path)
+        if os.path.exists(tmp_docx_path):
+            os.unlink(tmp_docx_path)
+
     except Exception as e:
         st.error(f"An error occurred during conversion: {e}")
         st.info("Please ensure the PDF is not password-protected or corrupted.")
